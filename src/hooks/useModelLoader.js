@@ -20,17 +20,12 @@ const useModelLoader = () => {
       // If not, we are starting fresh (or fresh after reset).
       
       try {
-        const results = [];
-        for (const file of files) {
-           console.log('[MODEL] Processing file:', file.name);
-           setFileName(files.length === 1 ? file.name : `Loading ${file.name}...`);
-           
-           // Execute the processor (loading into viewer)
-           if (fileProcessor) {
-               await fileProcessor(file.buffer, file.name);
-           }
-           
-           results.push(file.name);
+        const results = files.map(f => f.name);
+        setFileName(files.length === 1 ? files[0].name : `Loading ${files.length} models...`);
+        
+        // Execute the processor (loading into viewer) with all files at once
+        if (fileProcessor) {
+            await fileProcessor(files);
         }
         
         setModelCount(prev => prev + results.length);

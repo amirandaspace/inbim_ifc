@@ -13,6 +13,7 @@
     "@thatopen/components": "^3.3.1",
     "@thatopen/components-front": "^3.3.1",
     "@thatopen/fragments": "^3.3.3",
+    "lucide-react": "^0.575.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "three": "0.175.0",

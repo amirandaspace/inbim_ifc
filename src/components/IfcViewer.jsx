@@ -3,37 +3,39 @@ import * as OBC from '@thatopen/components';
 import * as THREE from 'three';
 import { useIfcEngine } from '../hooks/useIfcEngine';
 import { disposeAllFragments, clearHelperObjects, ensureSceneLighting } from '../utils/fragmentUtils';
+import { ClippingManager } from '../utils/ClippingManager';
 import { logger } from '../utils/logger';
 
 const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, ref) {
   const containerRef = useRef(null);
   const { engine, isReady, error } = useIfcEngine(containerRef);
+  const clippingMgrRef = useRef(null);
 
   // Expose loadFile method to parent
   useImperativeHandle(ref, () => ({
-    loadFile: async (buffer, fileName) => {
+    loadFiles: async (files) => {
         if (!engine) throw new Error('Engine not ready');
 
         const { components, ifcLoader, fragments, world } = engine;
-        const uint8 = new Uint8Array(buffer);
 
-        const model = await ifcLoader.load(uint8, false, fileName, {
-            processData: {
-                progressCallback: (progress) => {
-                    logger.info('[IFC] Loading progress:', progress);
+        const loadPromises = files.map(file => {
+            const uint8 = new Uint8Array(file.buffer);
+            return ifcLoader.load(uint8, false, file.name, {
+                processData: {
+                    progressCallback: (progress) => {
+                        logger.info(`[IFC] Loading progress for ${file.name}:`, progress);
+                    },
                 },
-            },
+            });
         });
-        logger.info('[IFC] Model loaded successfully:', model);
+
+        const models = await Promise.all(loadPromises);
+        
+        logger.info(`[IFC] ${models.length} models loaded successfully`);
         logger.info('[IFC] Fragments list size after load:', fragments.list.size);
 
         if (fragments.list.size === 0) {
             logger.error('[IFC] ERROR: No models added to fragments list after loading');
-        }
-
-        // Check model properties
-        if (model) {
-            logger.info('[IFC] Model ID:', model.uuid);
         }
 
         // Fit camera to model
@@ -53,9 +55,9 @@ const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, 
             ensureSceneLighting(world.scene.three);
 
             await world.camera.controls.fitToBox(bounds, true);
-            logger.info('[IFC] Camera fitted to bounding box');
+            logger.info('[IFC] Camera fitted to combined bounding box');
             
-            // Move grid to the bottom of the model
+            // Move grid to the bottom of the bounding box
             const grids = components.get(OBC.Grids);
             const grid = grids.list.values().next().value;
             if (grid) {
@@ -77,6 +79,105 @@ const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, 
             fragments.core.update(true);
             logger.info('[IFC] Forced fragment update done');
         }, 500);
+    },
+    fitModel: async () => {
+        if (!engine) return;
+        const { components, world } = engine;
+        const bbox = components.get(OBC.BoundingBoxer);
+        bbox.addFromModels();
+        const bounds = bbox.get();
+        await world.camera.controls.fitToBox(bounds, true);
+        bbox.dispose();
+    },
+    toggleProjection: () => {
+        if (!engine) return false;
+        const camera = engine.world.camera;
+        const isPerspective = camera.projection.current === "Perspective";
+        camera.projection.set(isPerspective ? "Orthographic" : "Perspective");
+        return camera.projection.current;
+    },
+    toggleGrid: () => {
+        if (!engine) return false;
+        const grids = engine.components.get(OBC.Grids);
+        if (grids.list.size > 0) {
+            const grid = grids.list.values().next().value;
+            if (grid) {
+                grid.three.visible = !grid.three.visible;
+                return grid.three.visible;
+            }
+        }
+        return false;
+    },
+    toggleClipping: () => {
+        if (!engine) return false;
+        
+        // Lazy-create the manager
+        if (!clippingMgrRef.current) {
+            clippingMgrRef.current = new ClippingManager(engine.world, engine.components);
+        }
+        const mgr = clippingMgrRef.current;
+        mgr.enabled = !mgr.enabled;
+
+        const container = engine.world.renderer.three.domElement;
+        
+        if (mgr.enabled) {
+            container.ondblclick = async (event) => {
+                // Try to raycast onto a face using OBC raycaster
+                const raycasters = engine.components.get(OBC.Raycasters);
+                const raycaster = raycasters.get(engine.world);
+                const result = await raycaster.castRay();
+                
+                logger.info('[CLIP] Raycast result:', result);
+                
+                if (result && result.point) {
+                    // Use the face normal from OBC raycaster
+                    let normal;
+                    if (result.normal) {
+                        normal = result.normal.clone();
+                    } else if (result.face && result.face.normal) {
+                        normal = result.face.normal.clone();
+                        if (result.object) {
+                            normal.transformDirection(result.object.matrixWorld);
+                        }
+                    } else {
+                        // Fallback: camera direction
+                        normal = result.point.clone()
+                            .sub(engine.world.camera.three.position)
+                            .normalize();
+                    }
+                    mgr.createPlane(result.point.clone(), normal.negate());
+                } else {
+                    // No hit — place at model centre
+                    mgr.createPlaneAtCenter();
+                }
+            };
+            window.onkeydown = (e) => {
+                if (e.code === 'Delete' || e.code === 'Backspace') mgr.removeLastPlane();
+            };
+        } else {
+            container.ondblclick = null;
+            window.onkeydown = null;
+            mgr.removeAll();
+        }
+        return mgr.enabled;
+    },
+    setClipMode: (mode) => {
+        if (!clippingMgrRef.current) return;
+        clippingMgrRef.current.setMode(mode);
+    },
+    hideSelection: () => {
+        if (!engine) return;
+        const hider = engine.components.get(OBC.Hider);
+        const selection = engine.highlighter.selection.select;
+        if (selection && Object.keys(selection).length > 0) {
+            hider.set(false, selection);
+            engine.highlighter.clear();
+        }
+    },
+    showAll: () => {
+        if (!engine) return;
+        const hider = engine.components.get(OBC.Hider);
+        hider.set(true);
     },
     reset: () => {
         if (!engine) return;

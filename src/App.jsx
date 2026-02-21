@@ -6,6 +6,7 @@ import IfcViewer from './components/IfcViewer';
 import Header from './components/Header';
 import PropertyPanel from './components/PropertyPanel';
 import LoadingOverlay from './components/LoadingOverlay';
+import Toolbar from './components/Toolbar';
 import './App.css';
 
 export default function App() {
@@ -21,6 +22,8 @@ export default function App() {
   } = useModelLoader();
   
   const [engineReady, setEngineReady] = useState(false);
+  const [isClippingActive, setIsClippingActive] = useState(false);
+  const [showProperties, setShowProperties] = useState(true);
   const viewerRef = useRef(null);
 
   const handleEngineReady = useCallback(() => {
@@ -39,8 +42,8 @@ export default function App() {
         return;
     }
     
-    handleFileLoad(files, async (buffer, fileName) => {
-        await viewerRef.current.loadFile(buffer, fileName);
+    handleFileLoad(files, async (fileArray) => {
+        await viewerRef.current.loadFiles(fileArray);
     });
   }, [engineReady, handleFileLoad]);
 
@@ -72,10 +75,25 @@ export default function App() {
         />
 
         {/* Properties Panel (Right Sidebar) */}
-        {selectedElement && (
+        {showProperties && selectedElement && (
             <PropertyPanel 
               selectedElement={selectedElement} 
               onClose={clearSelection} 
+            />
+        )}
+
+        {/* Floating Toolbar */}
+        {hasModel && engineReady && (
+            <Toolbar 
+              onFitModel={() => viewerRef.current?.fitModel()}
+              onToggleProjection={() => viewerRef.current?.toggleProjection()}
+              onToggleGrid={() => viewerRef.current?.toggleGrid()}
+              onToggleClipping={() => setIsClippingActive(viewerRef.current?.toggleClipping())}
+              onHideSelection={() => viewerRef.current?.hideSelection()}
+              onShowAll={() => viewerRef.current?.showAll()}
+              onToggleProperties={() => setShowProperties(!showProperties)}
+              isClippingActive={isClippingActive}
+              isPropertiesActive={showProperties}
             />
         )}
 

@@ -507,3 +507,44 @@
   color: var(--text-muted);
   font-style: italic;
 }
+
+/* ─── Toolbar ─── */
+.viewer-toolbar {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  background: #3b82f6; /* Blue matching standard UI */
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+}
+
+.toolbar-btn {
+  background: transparent;
+  border: none;
+  color: white;
+  padding: 10px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.toolbar-btn.active {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.3);
+}
