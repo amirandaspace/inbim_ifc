@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { useIfcEngine } from '../hooks/useIfcEngine';
 import { disposeAllFragments, clearHelperObjects, ensureSceneLighting } from '../utils/fragmentUtils';
 import { ClippingManager } from '../utils/ClippingManager';
+import ViewCube from './ViewCube';
 import { logger } from '../utils/logger';
 
 const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, ref) {
@@ -229,6 +230,7 @@ const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, 
   return (
     <div className="viewer-wrapper">
       <div ref={containerRef} className="viewer-container" />
+      {engine && <ViewCube world={engine.world} />}
       <div className="controls-hint">
         <span className="hint-tag">🖱 Left: Rotate</span>
         <span className="hint-tag">🖱 Right: Pan</span>

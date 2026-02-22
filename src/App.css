@@ -548,3 +548,15 @@
   height: 24px;
   background: rgba(255, 255, 255, 0.3);
 }
+
+/* ─── ViewCube ─── */
+.viewcube-canvas {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  width: 120px;
+  height: 120px;
+  cursor: pointer;
+  z-index: 90;
+  border-radius: 4px;
+}

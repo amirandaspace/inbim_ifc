@@ -151,7 +151,7 @@ export class ClippingManager {
 
     const translateCtrl = new TransformControls(this._threeCamera, domElement);
     translateCtrl.setMode('translate');
-    translateCtrl.setSize(1.0);
+    translateCtrl.setSize(0.75);
     translateCtrl.setSpace('local');
     translateCtrl.attach(helper);
     const translateHelper = translateCtrl.getHelper();
@@ -163,7 +163,7 @@ export class ClippingManager {
 
     const rotateCtrl = new TransformControls(this._threeCamera, domElement);
     rotateCtrl.setMode('rotate');
-    rotateCtrl.setSize(1.2);
+    rotateCtrl.setSize(0.9);
     rotateCtrl.setSpace('local');
     rotateCtrl.attach(helper);
     const rotateHelper = rotateCtrl.getHelper();
