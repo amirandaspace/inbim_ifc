@@ -8,12 +8,12 @@ import * as THREE from 'three';
  */
 
 const FACE_LABELS = [
-  { text: 'FRENTE',   color: '#ef4444', normal: new THREE.Vector3(0, 0,  1) },
-  { text: 'TRÁS',     color: '#22c55e', normal: new THREE.Vector3(0, 0, -1) },
-  { text: 'TOPO',     color: '#6366f1', normal: new THREE.Vector3(0,  1, 0) },
-  { text: 'BASE',     color: '#f59e0b', normal: new THREE.Vector3(0, -1, 0) },
-  { text: 'DIREITA',  color: '#3b82f6', normal: new THREE.Vector3( 1, 0, 0) },
-  { text: 'ESQUERDA', color: '#ec4899', normal: new THREE.Vector3(-1, 0, 0) },
+  { text: 'FRENTE',   color: '#e2e8f0', normal: new THREE.Vector3(0, 0,  1) },
+  { text: 'TRÁS',     color: '#e2e8f0', normal: new THREE.Vector3(0, 0, -1) },
+  { text: 'TOPO',     color: '#f8fafc', normal: new THREE.Vector3(0,  1, 0) },
+  { text: 'BASE',     color: '#f8fafc', normal: new THREE.Vector3(0, -1, 0) },
+  { text: 'DIREITA',  color: '#cbd5e1', normal: new THREE.Vector3( 1, 0, 0) },
+  { text: 'ESQUERDA', color: '#cbd5e1', normal: new THREE.Vector3(-1, 0, 0) },
 ];
 
 function createLabelTexture(text, faceColor) {
@@ -28,12 +28,12 @@ function createLabelTexture(text, faceColor) {
   ctx.fillRect(0, 0, size, size);
 
   // Border
-  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-  ctx.lineWidth = 4;
-  ctx.strokeRect(2, 2, size - 4, size - 4);
+  ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(3, 3, size - 6, size - 6);
 
   // Text
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.fillStyle = '#334155';
   ctx.font = 'bold 36px Inter, Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -88,12 +88,12 @@ export default function ViewCube({ world }) {
     const cube = createCube();
     scene.add(cube);
 
-    // Hover highlight mesh (slightly larger, transparent white)
+    // Hover highlight mesh (slightly larger, transparent blue)
     const hoverGeo = new THREE.BoxGeometry(1.61, 1.61, 1.61);
     const hoverMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
+      color: 0x3b82f6, // soft blue highlight
       transparent: true,
-      opacity: 0.3,
+      opacity: 0.35,
       side: THREE.DoubleSide,
     });
     const hoverMesh = new THREE.Mesh(hoverGeo, hoverMat);
