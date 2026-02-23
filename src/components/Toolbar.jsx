@@ -6,7 +6,8 @@ import {
   Scissors, 
   EyeOff, 
   Eye, 
-  Info
+  Info,
+  Layers
 } from 'lucide-react';
 
 export default function Toolbar({ 
@@ -17,10 +18,12 @@ export default function Toolbar({
   onHideSelection, 
   onShowAll, 
   onToggleProperties,
+  onToggleTree,
   isClippingActive,
   isClippingVisible,
   onToggleClippingVisibility,
-  isPropertiesActive
+  isPropertiesActive,
+  isTreeActive
 }) {
   return (
     <div className="viewer-toolbar">
@@ -57,6 +60,9 @@ export default function Toolbar({
       <div className="toolbar-divider" />
       <button className={`toolbar-btn ${isPropertiesActive ? 'active' : ''}`} onClick={onToggleProperties} title="Toggle Properties">
         <Info size={18} />
+      </button>
+      <button className={`toolbar-btn ${isTreeActive ? 'active' : ''}`} onClick={onToggleTree} title="Toggle IFC Structure Tree">
+        <Layers size={18} />
       </button>
     </div>
   );

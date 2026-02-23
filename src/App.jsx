@@ -7,6 +7,7 @@ import Header from './components/Header';
 import PropertyPanel from './components/PropertyPanel';
 import LoadingOverlay from './components/LoadingOverlay';
 import Toolbar from './components/Toolbar';
+import IfcTreePanel from './components/IfcTreePanel';
 import './App.css';
 
 export default function App() {
@@ -25,6 +26,8 @@ export default function App() {
   const [isClippingActive, setIsClippingActive] = useState(false);
   const [isClippingVisible, setIsClippingVisible] = useState(true);
   const [showProperties, setShowProperties] = useState(true);
+  const [showTree, setShowTree] = useState(false);
+  const [treeRefreshKey, setTreeRefreshKey] = useState(0);
   const viewerRef = useRef(null);
 
   const handleEngineReady = useCallback(() => {
@@ -45,6 +48,10 @@ export default function App() {
     
     handleFileLoad(files, async (fileArray) => {
         await viewerRef.current.loadFiles(fileArray);
+        // Trigger tree rebuild after model finishes loading
+        setTreeRefreshKey(k => k + 1);
+        // Auto-open the tree panel on first model load
+        setShowTree(true);
     });
   }, [engineReady, handleFileLoad]);
 
@@ -68,6 +75,15 @@ export default function App() {
 
       {/* Main */}
       <div className="main-content">
+        {/* Left Sidebar – Spatial Tree */}
+        {showTree && hasModel && (
+          <IfcTreePanel
+            viewerRef={viewerRef}
+            refreshKey={treeRefreshKey}
+            onClose={() => setShowTree(false)}
+          />
+        )}
+
         <IfcViewer
           ref={viewerRef}
           onReady={handleEngineReady}
@@ -94,9 +110,11 @@ export default function App() {
               onHideSelection={() => viewerRef.current?.hideSelection()}
               onShowAll={() => viewerRef.current?.showAll()}
               onToggleProperties={() => setShowProperties(!showProperties)}
+              onToggleTree={() => setShowTree(!showTree)}
               isClippingActive={isClippingActive}
               isClippingVisible={isClippingVisible}
               isPropertiesActive={showProperties}
+              isTreeActive={showTree}
             />
         )}
 

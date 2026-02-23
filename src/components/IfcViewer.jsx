@@ -1,11 +1,105 @@
 import { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import * as OBC from '@thatopen/components';
+import * as FRAGS from '@thatopen/fragments';
 import * as THREE from 'three';
 import { useIfcEngine } from '../hooks/useIfcEngine';
 import { disposeAllFragments, clearHelperObjects, ensureSceneLighting } from '../utils/fragmentUtils';
 import { ClippingManager } from '../utils/ClippingManager';
 import ViewCube from './ViewCube';
 import { logger } from '../utils/logger';
+
+/* ─── Spatial tree helpers (OBC v3 / FRAGS v3) ─── */
+
+/**
+ * Convert a numeric FRAGS category code to a readable IFC type string.
+ * ifcCategoryMap: { '103090709': 'IFCPROJECT', ... }
+ * Returns 'IfcProject' style string.
+ */
+function catToTypeName(catCode) {
+  if (catCode == null) return 'IfcElement';
+  const raw = FRAGS.ifcCategoryMap?.[String(catCode)]; // e.g. 'IFCPROJECT'
+  if (!raw) return `IfcType_${catCode}`;
+  // 'IFCPROJECT' → 'IfcProject'
+  return 'Ifc' + raw.slice(3, 4).toUpperCase() + raw.slice(4).toLowerCase();
+}
+
+/**
+ * Collect all localIds in a raw getSpatialStructure tree.
+ */
+function collectLocalIds(node, out = []) {
+  if (node?.localId != null) out.push(node.localId);
+  for (const child of node?.children ?? []) collectLocalIds(child, out);
+  return out;
+}
+
+/**
+ * Recursively convert a raw getSpatialStructure node (category+localId+children)
+ * into our display node (type, name, expressID, children).
+ */
+function enrichNode(raw, nameMap) {
+  const typeName = catToTypeName(raw.category);
+  const name = nameMap.get(raw.localId) ?? typeName;
+  const children = (raw.children ?? []).map(c => enrichNode(c, nameMap));
+  return { expressID: raw.localId, type: typeName, name, children };
+}
+
+/**
+ * Builds the display tree for a single FragmentsModel.
+ * Uses model.getSpatialStructure() (native v3 API) and batch-fetches
+ * element names via model.getItemsData().
+ */
+async function buildModelTree(model) {
+  logger.info('[TREE] buildModelTree called. model type:', Object.getPrototypeOf(model)?.constructor?.name);
+  logger.info('[TREE] model keys:', Object.getOwnPropertyNames(Object.getPrototypeOf(model)).join(', '));
+  logger.info('[TREE] model.modelId:', model.modelId);
+  logger.info('[TREE] model.name:', model.name);
+  logger.info('[TREE] typeof model.getSpatialStructure:', typeof model.getSpatialStructure);
+
+  let raw = null;
+  try {
+    raw = await model.getSpatialStructure();
+    logger.info('[TREE] getSpatialStructure raw result:', raw);
+    logger.info('[TREE] raw type:', typeof raw);
+    if (raw !== null && raw !== undefined) {
+      logger.info('[TREE] raw keys:', Object.keys(raw).join(', '));
+      logger.info('[TREE] raw.localId:', raw.localId);
+      logger.info('[TREE] raw.category:', raw.category);
+      logger.info('[TREE] raw.children length:', raw.children?.length ?? 'no children prop');
+    }
+  } catch (err) {
+    logger.warn('[TREE] getSpatialStructure threw:', err);
+    return null;
+  }
+
+  if (!raw || raw.localId == null) {
+    logger.warn('[TREE] raw is null/empty or has no localId – returning null. raw=', raw);
+    return null;
+  }
+
+  // Batch-fetch names for all localIds in one call
+  const nameMap = new Map();
+  try {
+    const localIds = collectLocalIds(raw);
+    logger.info('[TREE] localIds collected:', localIds.length, 'first few:', localIds.slice(0,5));
+    const itemsData = await model.getItemsData(localIds);
+    logger.info('[TREE] getItemsData returned:', itemsData?.length, 'items, sample[0]:', itemsData?.[0]);
+    for (const item of itemsData ?? []) {
+      if (item == null) continue;
+      const id = item.localId ?? item.expressID;
+      if (id == null) continue;
+      const nameRaw = item.Name ?? item.LongName;
+      const name = typeof nameRaw === 'object' ? nameRaw?.value : nameRaw;
+      if (name) nameMap.set(id, String(name));
+    }
+    logger.info('[TREE] nameMap size:', nameMap.size);
+  } catch (err) {
+    logger.warn('[TREE] getItemsData failed (names will fall back to types):', err);
+  }
+
+  const tree = enrichNode(raw, nameMap);
+  logger.info('[TREE] final tree root:', tree?.type, tree?.name, 'children:', tree?.children?.length);
+  return tree;
+}
 
 const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, ref) {
   const containerRef = useRef(null);
@@ -181,10 +275,17 @@ const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, 
             engine.highlighter.clear();
         }
     },
-    showAll: () => {
+    showAll: async () => {
         if (!engine) return;
-        const hider = engine.components.get(OBC.Hider);
-        hider.set(true);
+        const { fragments, components } = engine;
+        // Try the v3 model-level reset first, fall back to v2 Hider
+        for (const [, model] of fragments.list) {
+            try { await model.resetVisible(); } catch (_) { /* skip */ }
+        }
+        try {
+            const hider = components.get(OBC.Hider);
+            hider.set(true);
+        } catch (_) { /* Hider may throw in pure v3 */ }
     },
     reset: () => {
         if (!engine) return;
@@ -200,6 +301,72 @@ const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, 
         
         disposeAllFragments(engine.fragments);
         clearHelperObjects(engine.world.scene.three);
+    },
+
+    /* ─── Spatial tree ─── */
+
+    getSpatialStructure: async () => {
+        if (!engine) return [];
+        const { fragments } = engine;
+        const results = [];
+
+        logger.info('[TREE] fragments.list size:', fragments.list.size);
+        logger.info('[TREE] fragments.list type:', Object.getPrototypeOf(fragments.list)?.constructor?.name);
+
+        let idx = 0;
+        for (const [modelId, model] of fragments.list) {
+            logger.info(`[TREE] model[${idx}] key="${modelId}" constructor="${Object.getPrototypeOf(model)?.constructor?.name}"`);
+            logger.info(`[TREE] model[${idx}] own props:`, Object.getOwnPropertyNames(model).join(', '));
+            logger.info(`[TREE] model[${idx}] proto methods:`, Object.getOwnPropertyNames(Object.getPrototypeOf(model) ?? {}).join(', '));
+            logger.info(`[TREE] model[${idx}] getSpatialStructure?`, typeof model.getSpatialStructure);
+            logger.info(`[TREE] model[${idx}] getItemsData?`, typeof model.getItemsData);
+            idx++;
+            try {
+                const tree = await buildModelTree(model);
+                results.push({
+                    modelId,
+                    name: model.name || model.modelId || 'IFC Model',
+                    tree,
+                });
+            } catch (err) {
+                logger.warn('[TREE] Error building tree for model:', err);
+            }
+        }
+        logger.info('[TREE] getSpatialStructure results:', results.length, 'models');
+        return results;
+    },
+
+    highlightNode: (expressID, modelId) => {
+        if (!engine) return;
+        const { fragments, highlighter } = engine;
+
+        // Build a fragment map: { modelId: Set<localId> }
+        // If modelId is given, target that model; otherwise try all models
+        const fragmentMap = {};
+        for (const [mid] of fragments.list) {
+            if (!modelId || mid === modelId) {
+                fragmentMap[mid] = new Set([expressID]);
+            }
+        }
+
+        if (Object.keys(fragmentMap).length > 0) {
+            highlighter.highlightByID('select', fragmentMap, true, true);
+        }
+    },
+
+    setNodeVisibility: async (expressIDs, visible, modelId) => {
+        if (!engine) return;
+        const { fragments } = engine;
+
+        for (const [mid, model] of fragments.list) {
+            if (!modelId || mid === modelId) {
+                try {
+                    await model.setVisible(visible, expressIDs);
+                } catch (err) {
+                    logger.warn('[TREE] setVisible failed:', err);
+                }
+            }
+        }
     },
   }));
 
@@ -244,27 +411,24 @@ const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, 
         let props = null;
 
         try {
-            // Find the model containing this fragment
-            if (engine.fragments.groups) {
-                for (const [, group] of engine.fragments.groups) {
-                    if (group.keyFragments.has(fragmentId)) {
-                        targetModel = group;
+        // In v3 the selection key IS the model ID – look it up directly
+            if (engine.fragments.list) {
+                targetModel = engine.fragments.list.get(fragmentId) ?? null;
+                // If not found by model ID, scan all models (backward compat)
+                if (!targetModel) {
+                    for (const [, m] of engine.fragments.list) {
+                        targetModel = m;
                         break;
                     }
                 }
             }
             
-            // Try to extract properties if available
+            // Fetch properties via v3 getItemsData
             if (targetModel) {
-                if (typeof targetModel.getLocalProperties === 'function') {
-                    props = await targetModel.getLocalProperties(expressID);
-                } else if (targetModel.properties) {
-                    props = targetModel.properties[expressID] || targetModel.properties;
-                } else if (targetModel.data) {
-                     props = targetModel.data[expressID];
-                }
-                
-                // If it's still null, properties might not be loaded in the file, or using an indexer
+                try {
+                    const itemsData = await targetModel.getItemsData([expressID]);
+                    props = itemsData?.[0] ?? null;
+                } catch (_) { /* properties unavailable */ }
             }
         } catch (err) {
             console.warn('[IFC] Failed to fetch properties for', expressID, err);
@@ -272,7 +436,7 @@ const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, 
 
         onSelect({ 
             expressID, 
-            modelID: targetModel?.uuid || fragmentId, 
+            modelID: fragmentId,   // in v3, selection key is the model ID
             properties: props 
         });
     };

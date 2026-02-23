@@ -81,6 +81,11 @@ export const useIfcEngine = (containerRef) => {
       });
 
       fragments.list.onItemSet.add(({ value: model }) => {
+        logger.info('[ENGINE] onItemSet model constructor:', Object.getPrototypeOf(model)?.constructor?.name);
+        logger.info('[ENGINE] onItemSet model methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(model) ?? {}).slice(0, 20).join(', '));
+        logger.info('[ENGINE] onItemSet model.getSpatialStructure?:', typeof model.getSpatialStructure);
+        logger.info('[ENGINE] onItemSet model.getItemsData?:', typeof model.getItemsData);
+        logger.info('[ENGINE] onItemSet model.modelId:', model.modelId);
         model.useCamera(world.camera.three);
         world.scene.three.add(model.object);
         fragments.core.update(true);
