@@ -23,6 +23,7 @@ export default function App() {
   
   const [engineReady, setEngineReady] = useState(false);
   const [isClippingActive, setIsClippingActive] = useState(false);
+  const [isClippingVisible, setIsClippingVisible] = useState(true);
   const [showProperties, setShowProperties] = useState(true);
   const viewerRef = useRef(null);
 
@@ -89,10 +90,12 @@ export default function App() {
               onToggleProjection={() => viewerRef.current?.toggleProjection()}
               onToggleGrid={() => viewerRef.current?.toggleGrid()}
               onToggleClipping={() => setIsClippingActive(viewerRef.current?.toggleClipping())}
+              onToggleClippingVisibility={() => setIsClippingVisible(viewerRef.current?.toggleClippingVisibility())}
               onHideSelection={() => viewerRef.current?.hideSelection()}
               onShowAll={() => viewerRef.current?.showAll()}
               onToggleProperties={() => setShowProperties(!showProperties)}
               isClippingActive={isClippingActive}
+              isClippingVisible={isClippingVisible}
               isPropertiesActive={showProperties}
             />
         )}

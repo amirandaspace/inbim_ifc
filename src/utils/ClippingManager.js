@@ -22,6 +22,9 @@ export class ClippingManager {
   /** @type {boolean} */
   _enabled = false;
 
+  /** @type {boolean} */
+  _visible = true;
+
   /** @type {string} */
   _mode = 'translate';
 
@@ -44,6 +47,25 @@ export class ClippingManager {
 
   get enabled() { return this._enabled; }
   set enabled(val) { this._enabled = val; }
+
+  get visible() { return this._visible; }
+  
+  toggleVisibility(visible) {
+    this._visible = visible;
+    for (const entry of this._entries) {
+      entry.helper.visible = visible;
+      
+      const tHelper = entry.translateCtrl.getHelper();
+      const rHelper = entry.rotateCtrl.getHelper();
+      
+      tHelper.visible = visible;
+      rHelper.visible = visible;
+      
+      // If hidden, disable controls so they don't catch raycasts/clicks
+      entry.translateCtrl.enabled = visible;
+      entry.rotateCtrl.enabled = visible;
+    }
+  }
 
   get mode() { return this._mode; }
   setMode(mode) {

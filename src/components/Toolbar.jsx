@@ -18,6 +18,8 @@ export default function Toolbar({
   onShowAll, 
   onToggleProperties,
   isClippingActive,
+  isClippingVisible,
+  onToggleClippingVisibility,
   isPropertiesActive
 }) {
   return (
@@ -36,6 +38,15 @@ export default function Toolbar({
       <button className={`toolbar-btn ${isClippingActive ? 'active' : ''}`} onClick={onToggleClipping} title="Toggle Clipping Planes (dbl-click to place)">
         <Scissors size={18} />
       </button>
+      {isClippingActive && (
+        <button 
+          className={`toolbar-btn ${isClippingVisible ? 'active' : ''}`} 
+          onClick={onToggleClippingVisibility} 
+          title={isClippingVisible ? "Hide Clipping Gizmo" : "Show Clipping Gizmo"}
+        >
+          {isClippingVisible ? <Eye size={18} /> : <EyeOff size={18} />}
+        </button>
+      )}
       <div className="toolbar-divider" />
       <button className="toolbar-btn" onClick={onHideSelection} title="Hide Selection">
         <EyeOff size={18} />

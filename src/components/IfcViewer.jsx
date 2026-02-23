@@ -166,6 +166,12 @@ const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, 
         if (!clippingMgrRef.current) return;
         clippingMgrRef.current.setMode(mode);
     },
+    toggleClippingVisibility: () => {
+        if (!clippingMgrRef.current) return false;
+        const mgr = clippingMgrRef.current;
+        mgr.toggleVisibility(!mgr.visible);
+        return mgr.visible;
+    },
     hideSelection: () => {
         if (!engine) return;
         const hider = engine.components.get(OBC.Hider);
@@ -217,13 +223,71 @@ const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, 
     const highlighter = engine.highlighter;
     const components = engine.components;
 
-    // Simple selection handling via highlighter events usually
-    // But since logic wasn't fully implemented in original file, keeping it simple or adding if needed.
-    // The original file didn't seem to have the selection logic fully wired in the effect, 
-    // it just initialized the highlighter.
-    // If we want to implement selection, we would add event listeners here.
-    
-    // For now, mirroring the original behavior which passed checks to App.
+    // Handle selection via highlighter events
+    const handleHighlight = async (selection) => {
+        if (!selection || Object.keys(selection).length === 0) {
+            onSelect(null);
+            return;
+        }
+
+        const fragmentId = Object.keys(selection)[0];
+        const expressIDSet = selection[fragmentId];
+        
+        if (!expressIDSet || expressIDSet.size === 0) {
+           onSelect(null);
+           return;
+        }
+
+        const expressID = Array.from(expressIDSet)[0];
+        
+        let targetModel = null;
+        let props = null;
+
+        try {
+            // Find the model containing this fragment
+            if (engine.fragments.groups) {
+                for (const [, group] of engine.fragments.groups) {
+                    if (group.keyFragments.has(fragmentId)) {
+                        targetModel = group;
+                        break;
+                    }
+                }
+            }
+            
+            // Try to extract properties if available
+            if (targetModel) {
+                if (typeof targetModel.getLocalProperties === 'function') {
+                    props = await targetModel.getLocalProperties(expressID);
+                } else if (targetModel.properties) {
+                    props = targetModel.properties[expressID] || targetModel.properties;
+                } else if (targetModel.data) {
+                     props = targetModel.data[expressID];
+                }
+                
+                // If it's still null, properties might not be loaded in the file, or using an indexer
+            }
+        } catch (err) {
+            console.warn('[IFC] Failed to fetch properties for', expressID, err);
+        }
+
+        onSelect({ 
+            expressID, 
+            modelID: targetModel?.uuid || fragmentId, 
+            properties: props 
+        });
+    };
+
+    const handleClear = () => {
+        onSelect(null);
+    };
+
+    highlighter.events.select.onHighlight.add(handleHighlight);
+    highlighter.events.select.onClear.add(handleClear);
+
+    return () => {
+        highlighter.events.select.onHighlight.remove(handleHighlight);
+        highlighter.events.select.onClear.remove(handleClear);
+    };
 
   }, [engine, onSelect]);
 
