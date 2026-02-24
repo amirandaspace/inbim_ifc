@@ -432,12 +432,26 @@ const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, 
                 }
             }
             
-            // Fetch properties via v3 getItemsData
+            // Fetch properties via v3 getItemsData with relations (Psets, materials, type)
             if (targetModel) {
                 try {
-                    const itemsData = await targetModel.getItemsData([expressID]);
+                    const itemsData = await targetModel.getItemsData([expressID], {
+                        attributesDefault: true,
+                        relationsDefault: { attributes: true, relations: true },
+                        relations: {
+                            IsDefinedBy:    { attributes: true, relations: true },
+                            HasAssociations: { attributes: true, relations: true },
+                            IsTypedBy:      { attributes: true, relations: true },
+                        },
+                    });
                     props = itemsData?.[0] ?? null;
-                } catch (_) { /* properties unavailable */ }
+                } catch (err) {
+                    console.warn('[IFC] getItemsData with relations failed, falling back:', err);
+                    try {
+                        const basic = await targetModel.getItemsData([expressID]);
+                        props = basic?.[0] ?? null;
+                    } catch (__) { /* properties unavailable */ }
+                }
             }
         } catch (err) {
             console.warn('[IFC] Failed to fetch properties for', expressID, err);
