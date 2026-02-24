@@ -93,9 +93,9 @@ function TreeNode({ node, viewerRef, hiddenIDs, onToggleHidden, modelId, depth =
       {/* Children */}
       {expanded && hasChildren && (
         <div className="tree-children">
-          {node.children.map(child => (
+          {node.children.map((child, idx) => (
             <TreeNode
-              key={child.expressID}
+              key={child.expressID ?? `child-${idx}-${child.type}`}
               node={child}
               viewerRef={viewerRef}
               hiddenIDs={hiddenIDs}
@@ -256,6 +256,7 @@ export default function IfcTreePanel({ viewerRef, refreshKey, onClose }) {
               {tree ? (
                 search ? (
                   <FilteredTree
+                    key={`filtered-${modelId}`}
                     node={tree}
                     viewerRef={viewerRef}
                     hiddenIDs={hiddenIDs}
@@ -265,6 +266,7 @@ export default function IfcTreePanel({ viewerRef, refreshKey, onClose }) {
                   />
                 ) : (
                   <TreeNode
+                    key={`root-${modelId}`}
                     node={tree}
                     viewerRef={viewerRef}
                     hiddenIDs={hiddenIDs}

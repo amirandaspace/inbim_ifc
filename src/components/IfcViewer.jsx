@@ -17,10 +17,17 @@ import { logger } from '../utils/logger';
  */
 function catToTypeName(catCode) {
   if (catCode == null) return 'IfcElement';
-  const raw = FRAGS.ifcCategoryMap?.[String(catCode)]; // e.g. 'IFCPROJECT'
-  if (!raw) return `IfcType_${catCode}`;
+  const val = String(catCode);
+  let raw = FRAGS.ifcCategoryMap?.[val];
+  // If not found in map, maybe it's already the raw string (e.g. "IFCPROJECT")
+  if (!raw && isNaN(Number(val))) raw = val;
+  
+  if (!raw) return `IfcType_${val}`;
   // 'IFCPROJECT' → 'IfcProject'
-  return 'Ifc' + raw.slice(3, 4).toUpperCase() + raw.slice(4).toLowerCase();
+  if (raw.startsWith('IFC')) {
+    return 'Ifc' + raw.slice(3, 4).toUpperCase() + raw.slice(4).toLowerCase();
+  }
+  return raw;
 }
 
 /**
@@ -71,8 +78,8 @@ async function buildModelTree(model) {
     return null;
   }
 
-  if (!raw || raw.localId == null) {
-    logger.warn('[TREE] raw is null/empty or has no localId – returning null. raw=', raw);
+  if (!raw) {
+    logger.warn('[TREE] getSpatialStructure returned null/undefined');
     return null;
   }
 
@@ -337,11 +344,10 @@ const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, 
     },
 
     highlightNode: (expressID, modelId) => {
-        if (!engine) return;
+        if (!engine || expressID == null) return;
         const { fragments, highlighter } = engine;
 
         // Build a fragment map: { modelId: Set<localId> }
-        // If modelId is given, target that model; otherwise try all models
         const fragmentMap = {};
         for (const [mid] of fragments.list) {
             if (!modelId || mid === modelId) {
@@ -355,13 +361,16 @@ const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, 
     },
 
     setNodeVisibility: async (expressIDs, visible, modelId) => {
-        if (!engine) return;
+        if (!engine || !expressIDs || expressIDs.length === 0) return;
         const { fragments } = engine;
+
+        const validIDs = expressIDs.filter(id => id != null);
+        if (validIDs.length === 0) return;
 
         for (const [mid, model] of fragments.list) {
             if (!modelId || mid === modelId) {
                 try {
-                    await model.setVisible(visible, expressIDs);
+                    await model.setVisible(visible, validIDs);
                 } catch (err) {
                     logger.warn('[TREE] setVisible failed:', err);
                 }
