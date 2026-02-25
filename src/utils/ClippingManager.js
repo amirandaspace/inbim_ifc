@@ -55,18 +55,18 @@ export class ClippingManager {
   set enabled(val) { this._enabled = val; }
 
   get visible() { return this._visible; }
-  
+
   toggleVisibility(visible) {
     this._visible = visible;
     for (const entry of this._entries) {
       entry.helper.visible = visible;
-      
+
       const tHelper = entry.translateCtrl.getHelper();
       const rHelper = entry.rotateCtrl.getHelper();
-      
+
       tHelper.visible = visible;
       rHelper.visible = visible;
-      
+
       // If hidden, disable controls so they don't catch raycasts/clicks
       entry.translateCtrl.enabled = visible;
       entry.rotateCtrl.enabled = visible;
@@ -118,7 +118,7 @@ export class ClippingManager {
       try {
         box.setFromObject(this.scene);
         if (!box.isEmpty()) found = true;
-      } catch(e) {
+      } catch (e) {
         // ignore
       }
     }
@@ -141,7 +141,9 @@ export class ClippingManager {
   createPlane(position, normal, planeSize) {
     const pos = position || new THREE.Vector3(0, 0, 0);
     const norm = normal || new THREE.Vector3(0, -1, 0);
-    const sz = planeSize || 30;
+
+    // If no size provided, calculate based on controls visual size (120%)
+    const sz = planeSize || this._getPlaneSizeAt(pos);
 
     logger.info('[CLIP] Creating plane at', pos.toArray(), 'normal:', norm.toArray(), 'size:', sz);
 
@@ -238,8 +240,8 @@ export class ClippingManager {
    * Create a plane at the centre of all loaded geometry.
    */
   createPlaneAtCenter() {
-    const { center, size } = this._getSceneCenter();
-    return this.createPlane(center, new THREE.Vector3(0, -1, 0), size * 1.2);
+    const { center } = this._getSceneCenter();
+    return this.createPlane(center, new THREE.Vector3(0, -1, 0));
   }
 
   removeLastPlane() {
@@ -269,6 +271,30 @@ export class ClippingManager {
     while (this._entries.length > 0) {
       this.removeLastPlane();
     }
+  }
+
+  /**
+   * Calculates a world-space size for the plane helper mesh
+   * that is roughly 120% of the visual size of the transform controls.
+   */
+  _getPlaneSizeAt(position) {
+    if (!this._threeCamera || !this.renderer) return 30;
+
+    const distance = position.distanceTo(this._threeCamera.position);
+
+    let worldScreenHeight = 1;
+    if (this._threeCamera.isPerspectiveCamera) {
+      worldScreenHeight = (distance * Math.tan(THREE.MathUtils.DEG2RAD * this._threeCamera.fov / 2) * 2);
+    } else if (this._threeCamera.isOrthographicCamera) {
+      worldScreenHeight = (this._threeCamera.top - this._threeCamera.bottom) / this._threeCamera.zoom;
+    }
+
+    // Heuristic: TransformControls with size 0.9 occupy a small portion of the screen height
+    // We want the plane to be 120% of that visual footprint
+    const gizmoScreenRatio = 0.15; // 15% of screen height
+    const gizmoWorldSize = worldScreenHeight * gizmoScreenRatio;
+
+    return gizmoWorldSize * 1.2;
   }
 
   /* ────── internal ────── */
@@ -345,7 +371,7 @@ export class ClippingManager {
           // Only update if planes reference changed to minimise overhead
           if (planes.length > 0) {
             if (!mat.clippingPlanes || mat.clippingPlanes.length !== planes.length ||
-                !planes.every((p, i) => mat.clippingPlanes[i] === p)) {
+              !planes.every((p, i) => mat.clippingPlanes[i] === p)) {
               mat.clippingPlanes = [...planes];
               mat.clipShadows = true;
               mat.needsUpdate = true;
