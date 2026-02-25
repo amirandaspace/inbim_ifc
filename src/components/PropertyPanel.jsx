@@ -20,90 +20,143 @@ function formatKey(key) {
 const SKIP_KEYS = new Set(['localId', 'expressID', 'handle', 'type']);
 const SYSTEM_KEYS = new Set(['_category', '_guid', '_localId']);
 // IFC relation arrays we know how to render specially
-const RELATION_KEYS = new Set(['IsDefinedBy', 'HasAssociations', 'IsTypedBy']);
+const RELATION_KEYS = new Set(['IsDefinedBy', 'HasAssociations', 'IsTypedBy', 'HasMaterial', 'Material']);
 
 /**
- * Try to extract property rows from a relation ItemData object.
- * In OBC v3, each value is { value, type } (ItemAttribute), and nested
- * relations are ItemData[] arrays.
- *
- * Handles:
- *   IsDefinedBy → IfcPropertySet (HasProperties[]) or IfcRelDefinesByType
- *   HasAssociations → IfcRelAssociatesMaterial
- *   IsTypedBy → IfcRelDefinesByType → HasPropertySets[]
+ * Helper to recursively extract a material name from complex material structures.
  */
-function extractPset(rel) {
-  if (!rel || typeof rel !== 'object') return null;
+function extractMaterialName(mat) {
+  if (!mat) return null;
 
-  const category = extractScalar(rel._category) ?? '';
-  const psetName = extractScalar(rel.Name) ?? null;
-
-  // ── Material association ──────────────────────────────────────────────────
-  if (category.includes('MATERIAL')) {
-    const matName = extractScalar(rel.Name);
-    if (matName) return { title: 'Material', rows: [{ key: 'material', label: 'Material', value: matName }] };
-    // IfcRelAssociatesMaterial: the material is under RelatingMaterial (also ItemData)
-    const related = rel.RelatingMaterial;
-    if (related && typeof related === 'object') {
-      const name = extractScalar(related.Name) ?? extractScalar(related.Category);
-      if (name) return { title: 'Material', rows: [{ key: 'material', label: 'Material', value: name }] };
-    }
-    return null;
+  // Handle arrays explicitly
+  if (Array.isArray(mat)) {
+    const names = mat
+      .map(m => extractMaterialName(m))
+      .filter(n => n && !n.toUpperCase().startsWith('IFC'));
+    return names.length > 0 ? Array.from(new Set(names)).join(', ') : null;
   }
 
-  // ── Type object (IsTypedBy or RelatingType items) ─────────────────────────
-  if (category.includes('RELDEFINESBYTYPE')) {
-    const sections = [];
-    const typeRels = rel.RelatingType;
-    const typeItems = Array.isArray(typeRels) ? typeRels : typeRels ? [typeRels] : [];
-    for (const t of typeItems) {
-      const typeName = extractScalar(t?.Name);
-      if (typeName) sections.push({ title: 'Type', rows: [{ key: 'typeName', label: 'Type Name', value: typeName }] });
-      // Psets attached to the type
-      const typePsets = t?.HasPropertySets;
-      if (Array.isArray(typePsets)) {
-        for (const ps of typePsets) {
-          const s = extractPset(ps);
-          if (s) sections.push(s);
-        }
-      }
-    }
-    return sections.length === 1 ? sections[0] : sections.length > 1 ? sections[0] : null;
+  if (typeof mat !== 'object') return null;
+
+  // 1. Direct Name check
+  const directName = extractScalar(mat.Name);
+  // We skip names that are just the IFC class name or generic (unhelpful)
+  const isGeneric = !directName || directName.toUpperCase().startsWith('IFC') || directName.toUpperCase() === 'MATERIAL';
+  if (directName && !isGeneric) return directName;
+
+  // 2. Drill down into common IFC material structures
+
+  // IfcMaterialLayerSetUsage -> ForLayerSet
+  if (mat.ForLayerSet) return extractMaterialName(mat.ForLayerSet);
+
+  // IfcMaterialLayerSet -> MaterialLayers[]
+  if (mat.MaterialLayers) return extractMaterialName(mat.MaterialLayers);
+
+  // IfcMaterialLayer -> Material
+  if (mat.Material) {
+    const n = extractMaterialName(mat.Material);
+    if (n) return n;
   }
 
-  // ── Standard IfcPropertySet (HasProperties) ───────────────────────────────
-  const hasProp = rel.HasProperties;
-  if (hasProp) {
-    const propList = Array.isArray(hasProp) ? hasProp : [hasProp];
+  // IfcMaterialList -> Materials[]
+  if (mat.Materials) return extractMaterialName(mat.Materials);
+
+  // IfcMaterialProfileSetUsage -> ForProfileSet
+  if (mat.ForProfileSet) return extractMaterialName(mat.ForProfileSet);
+
+  // IfcMaterialProfileSet -> MaterialProfiles[]
+  if (mat.MaterialProfiles) return extractMaterialName(mat.MaterialProfiles);
+
+  // IfcMaterialProfile -> Material
+  // (already handled by mat.Material check above)
+
+  // 3. Last resort: check if any of the attributes is a string that doesn't look like a type
+  if (directName) return directName;
+
+  return null;
+}
+
+/**
+ * Try to extract property rows from a relation or property object.
+ * Returns an array of sections: { title, rows: [{ key, label, value }] }[]
+ */
+function extractPsets(rel) {
+  if (!rel || typeof rel !== 'object') return [];
+  const results = [];
+
+  // ── 1. Material Relation (IfcRelAssociatesMaterial) ──
+  if (rel.RelatingMaterial) {
+    const name = extractMaterialName(rel.RelatingMaterial);
+    if (name) {
+      results.push({ title: 'Material', rows: [{ key: 'material', label: 'Material', value: name }] });
+    }
+  }
+
+  // ── 2. Property Set (IfcPropertySet) ──
+  if (rel.HasProperties) {
+    const psetName = extractScalar(rel.Name);
+    const propList = Array.isArray(rel.HasProperties) ? rel.HasProperties : [rel.HasProperties];
     const rows = [];
     for (const p of propList) {
       if (!p || typeof p !== 'object') continue;
       const name = extractScalar(p.Name);
-      // NominalValue is another { value, type } wrapper inside ItemData
       const nominal = p.NominalValue;
       const val = nominal && typeof nominal === 'object' && 'value' in nominal
         ? extractScalar(nominal)
         : extractScalar(p.Value);
       if (name && val !== null) rows.push({ key: name, label: name, value: val });
     }
-    if (rows.length) return { title: psetName ?? 'Property Set', rows };
-    return null;
+    if (rows.length) results.push({ title: psetName ?? 'Property Set', rows });
   }
 
-  // ── IfcRelDefinesByProperties wrapper (points to IfcPropertySet) ─────────
-  const relPset = rel.RelatingPropertyDefinition;
-  if (relPset) {
-    const items = Array.isArray(relPset) ? relPset : [relPset];
+  // ── 3. Relation Wrapper (IfcRelDefinesByProperties) ──
+  if (rel.RelatingPropertyDefinition) {
+    const items = Array.isArray(rel.RelatingPropertyDefinition) ? rel.RelatingPropertyDefinition : [rel.RelatingPropertyDefinition];
     for (const ps of items) {
-      const s = extractPset(ps);
-      if (s) return s;
+      results.push(...extractPsets(ps));
     }
   }
 
-  return null;
+  // ── 4. Type Relation (IfcRelDefinesByType) ──
+  if (rel.RelatingType) {
+    const typeItems = Array.isArray(rel.RelatingType) ? rel.RelatingType : [rel.RelatingType];
+    for (const t of typeItems) {
+      const typeName = extractScalar(t?.Name);
+      if (typeName) {
+        results.push({ title: 'Type', rows: [{ key: 'typeName', label: 'Type Name', value: typeName }] });
+      }
+      // Psets / Materials attached to the type
+      if (t.HasPropertySets) {
+        const psets = Array.isArray(t.HasPropertySets) ? t.HasPropertySets : [t.HasPropertySets];
+        for (const ps of psets) results.push(...extractPsets(ps));
+      }
+      if (t.HasAssociations) {
+        const assocs = Array.isArray(t.HasAssociations) ? t.HasAssociations : [t.HasAssociations];
+        for (const assoc of assocs) results.push(...extractPsets(assoc));
+      }
+    }
+  }
+
+  // ── 5. Direct Material (IfcMaterial style) ──
+  // If we haven't found anything yet and this object looks like a material
+  if (results.length === 0) {
+    const cat = (extractScalar(rel._category) ?? '').toUpperCase();
+    const isMatCat = cat.includes('MATERIAL') || !isNaN(Number(cat)); // Numeric categories are opaque, be generous
+    if (isMatCat || rel.MaterialLayers || rel.Materials || rel.MaterialProfiles) {
+      const name = extractMaterialName(rel);
+      if (name) {
+        results.push({ title: 'Material', rows: [{ key: 'material', label: 'Material', value: name }] });
+      }
+    }
+  }
+
+  return results;
 }
 
+import React, { useState } from 'react';
+
 const PropertyPanel = ({ selectedElement, onClose }) => {
+  const [showDebug, setShowDebug] = useState(false);
   const props = selectedElement?.properties ?? null;
 
   if (!props) {
@@ -146,8 +199,8 @@ const PropertyPanel = ({ selectedElement, onClose }) => {
     const relArray = Array.isArray(relValue) ? relValue : [relValue];
     for (const rel of relArray) {
       if (!rel || typeof rel !== 'object') continue;
-      const pset = extractPset(rel);
-      if (pset) psetSections.push(pset);
+      const results = extractPsets(rel);
+      psetSections.push(...results);
     }
   }
 
@@ -158,18 +211,38 @@ const PropertyPanel = ({ selectedElement, onClose }) => {
     </div>
   );
 
+  const getCircularReplacer = () => {
+    const seen = new WeakSet();
+    return (key, value) => {
+      if (typeof value === "object" && value !== null) {
+        if (seen.has(value)) {
+          return "[Circular]";
+        }
+        seen.add(value);
+      }
+      return value;
+    };
+  };
+
   return (
-    <div className="properties-panel">
+    <div className="properties-panel" style={{ display: 'flex', flexDirection: 'column', width: showDebug ? '600px' : undefined }}>
       <div className="panel-header">
-        <h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span>{typeLabel}</span>
           <span style={{ fontSize: '11px', opacity: 0.5 }}>#{selectedElement?.expressID}</span>
+          <button onClick={() => setShowDebug(!showDebug)} style={{ background: 'none', border: '1px solid currentColor', fontSize: '10px', padding: '2px 4px', cursor: 'pointer', borderRadius: '4px' }}>
+            {showDebug ? 'Hide JSON' : 'Show JSON'}
+          </button>
         </h3>
         <button onClick={onClose} title="Close">✕</button>
       </div>
 
-      <div className="panel-content">
-        {mainRows.length === 0 && psetSections.length === 0 && systemRows.length === 0 ? (
+      <div className="panel-content" style={{ flex: 1, overflowY: 'auto' }}>
+        {showDebug ? (
+          <pre style={{ fontSize: '10px', whiteSpace: 'pre-wrap', padding: '8px', background: '#f5f5f5', color: '#333' }}>
+            {JSON.stringify(props, getCircularReplacer(), 2)}
+          </pre>
+        ) : mainRows.length === 0 && psetSections.length === 0 && systemRows.length === 0 ? (
           <div className="empty-props">No displayable properties.</div>
         ) : (
           <>

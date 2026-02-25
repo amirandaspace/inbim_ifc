@@ -11,6 +11,7 @@ const __dirname = path.dirname(__filename)
 export default defineConfig({
   resolve: {
     alias: {
+      '@thatopen/components': path.resolve(__dirname, 'libs/engine_components/packages/core/src/index.ts'),
       three: path.resolve(__dirname, 'node_modules/three')
     },
     dedupe: ['three', 'react', 'react-dom', 'three-mesh-bvh', '@thatopen/components']
