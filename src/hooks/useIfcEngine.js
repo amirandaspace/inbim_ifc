@@ -13,21 +13,21 @@ export const useIfcEngine = (containerRef) => {
   const initEngine = useCallback(async (container, signal) => {
     try {
       logger.info('[ENGINE] Starting engine initialization');
-      
+
       // Clear container
       while (container.firstChild) {
         container.removeChild(container.firstChild);
       }
-      
+
       const components = new OBC.Components();
       await components.init();
       logger.info('[ENGINE] Components initialized');
-      
+
       if (signal.aborted) { components.dispose(); return; }
-      
+
       const worlds = components.get(OBC.Worlds);
       const world = worlds.create();
-      
+
       world.scene = new OBC.SimpleScene(components);
       // Use setup() with BIM360-style lighting — this creates exactly
       // 1 DirectionalLight + 1 AmbientLight internally.
@@ -44,19 +44,21 @@ export const useIfcEngine = (containerRef) => {
         },
       });
 
-      // ── BIM360-style gradient background (blue sky → warm beige) ──
+      // ── Gradient background fix (blue sky → warm beige) plain 2D ──
       const bgCanvas = document.createElement('canvas');
       bgCanvas.width = 2;
       bgCanvas.height = 512;
       const ctx = bgCanvas.getContext('2d');
       const grad = ctx.createLinearGradient(0, 0, 0, 512);
-      grad.addColorStop(0, '#b4ccdf');   // soft blue-grey sky
+      grad.addColorStop(0, '#9ebfdeff');   // blue sky
       grad.addColorStop(0.5, '#d9dfe5'); // neutral mid
-      grad.addColorStop(1, '#cfc4b5');   // warm beige ground
+      grad.addColorStop(1, '#e3d5c8');   // warm beige ground
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, 2, 512);
       const bgTexture = new THREE.CanvasTexture(bgCanvas);
-      bgTexture.mapping = THREE.EquirectangularReflectionMapping;
+      bgTexture.colorSpace = THREE.SRGBColorSpace;
+      // Define a textura diretamente ao background sem mapeamento esférico, 
+      // assim o fundo ficará estático como um elemento CSS.
       world.scene.three.background = bgTexture;
 
       // ── Additional lights (not created by setup) ──
@@ -85,20 +87,20 @@ export const useIfcEngine = (containerRef) => {
       fillLight.position.set(-50, 60, -40);
       world.scene.three.add(fillLight);
 
-  world.renderer = new OBC.SimpleRenderer(components, container);
-  // Enable shadow maps for depth differentiation
-  world.renderer.three.shadowMap.enabled = true;
-  world.renderer.three.shadowMap.type = THREE.PCFSoftShadowMap;
-  world.renderer.three.toneMapping = THREE.ACESFilmicToneMapping;
-  world.renderer.three.toneMappingExposure = 1.0;
-  world.camera = new OBC.OrthoPerspectiveCamera(components);
-  world.camera.three.far = 100000;
-  world.camera.three.updateProjectionMatrix();
-  await world.camera.controls.setLookAt(50, 30, 50, 0, 0, 0);
+      world.renderer = new OBC.SimpleRenderer(components, container);
+      // Enable shadow maps for depth differentiation
+      world.renderer.three.shadowMap.enabled = true;
+      world.renderer.three.shadowMap.type = THREE.PCFSoftShadowMap;
+      world.renderer.three.toneMapping = THREE.ACESFilmicToneMapping;
+      world.renderer.three.toneMappingExposure = 1.0;
+      world.camera = new OBC.OrthoPerspectiveCamera(components);
+      world.camera.three.far = 100000;
+      world.camera.three.updateProjectionMatrix();
+      await world.camera.controls.setLookAt(50, 30, 50, 0, 0, 0);
 
-  const grids = components.get(OBC.Grids);
-  grids.create(world);
-      
+      const grids = components.get(OBC.Grids);
+      grids.create(world);
+
       // Force resize
       if (world.renderer) world.renderer.update(container);
       window.dispatchEvent(new Event('resize'));

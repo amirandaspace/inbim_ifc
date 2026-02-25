@@ -139,22 +139,23 @@
   left: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(
-    circle at 30% 40%,
-    rgba(99, 102, 241, 0.06) 0%,
-    transparent 50%
-  ),
-  radial-gradient(
-    circle at 70% 60%,
-    rgba(139, 92, 246, 0.04) 0%,
-    transparent 50%
-  );
+  background: radial-gradient(circle at 30% 40%,
+      rgba(99, 102, 241, 0.06) 0%,
+      transparent 50%),
+    radial-gradient(circle at 70% 60%,
+      rgba(139, 92, 246, 0.04) 0%,
+      transparent 50%);
   animation: bgShift 15s ease-in-out infinite alternate;
 }
 
 @keyframes bgShift {
-  0% { transform: translate(0, 0); }
-  100% { transform: translate(-5%, -3%); }
+  0% {
+    transform: translate(0, 0);
+  }
+
+  100% {
+    transform: translate(-5%, -3%);
+  }
 }
 
 .upload-container {
@@ -179,8 +180,15 @@
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
 }
 
 .upload-icon svg {
@@ -295,7 +303,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .loading-text {
@@ -356,8 +366,15 @@
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 .error-toast button {
@@ -386,9 +403,9 @@
 
 .hint-tag {
   font-size: 11px;
-  color: var(--text-muted);
-  background: rgba(10, 10, 15, 0.7);
-  backdrop-filter: blur(10px);
+  color: var(--text-secondary);
+  background: var(--bg-panel);
+  backdrop-filter: var(--panel-blur);
   padding: 4px 10px;
   border-radius: 6px;
   border: 1px solid var(--border-color);
@@ -397,15 +414,16 @@
 /* ─── Properties Panel ─── */
 .properties-panel {
   position: absolute;
-  top: 70px; /* Below header */
+  top: 150px;
+  /* Below ViewCube */
   right: 20px;
   width: 320px;
-  max-height: calc(100% - 100px);
-  background: rgba(15, 15, 20, 0.95);
-  backdrop-filter: blur(20px);
+  max-height: calc(100% - 170px);
+  background: var(--bg-panel);
+  backdrop-filter: var(--panel-blur);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -414,8 +432,15 @@
 }
 
 @keyframes slideIn {
-  from { opacity: 0; transform: translateX(20px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .panel-header {
@@ -424,7 +449,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .panel-header h3 {
@@ -518,7 +543,8 @@
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  background: #3b82f6; /* Blue matching standard UI */
+  background: #3b82f6;
+  /* Blue matching standard UI */
   border-radius: 6px;
   overflow: hidden;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
@@ -554,7 +580,7 @@
 /* ─── ViewCube ─── */
 .viewcube-canvas {
   position: absolute;
-  bottom: 16px;
+  top: 16px;
   right: 16px;
   width: 120px;
   height: 120px;
@@ -569,7 +595,8 @@
   min-width: 240px;
   max-width: 340px;
   height: 100%;
-  background: rgba(12, 12, 18, 0.97);
+  background: var(--bg-panel);
+  backdrop-filter: var(--panel-blur);
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
@@ -579,8 +606,15 @@
 }
 
 @keyframes slideInLeft {
-  from { opacity: 0; transform: translateX(-24px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 /* ─── Tree Search Bar ─── */
@@ -649,7 +683,7 @@
 }
 
 .tree-action-btn:hover {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
 }
 
@@ -695,7 +729,7 @@
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   margin-bottom: 2px;
 }
 
@@ -755,7 +789,7 @@
 }
 
 .tree-expand-btn:hover {
-  background: rgba(255,255,255,0.15);
+  background: rgba(255, 255, 255, 0.15);
   color: var(--text-primary);
 }
 
@@ -799,7 +833,7 @@
 .tree-badge {
   font-size: 10px;
   color: var(--text-muted);
-  background: rgba(255,255,255,0.05);
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-color);
   border-radius: 4px;
   padding: 1px 5px;
@@ -823,7 +857,7 @@
 }
 
 .tree-vis-btn:hover {
-  background: rgba(255,255,255,0.12);
+  background: rgba(255, 255, 255, 0.12);
   color: var(--text-primary);
 }
 
@@ -833,9 +867,7 @@
 }
 
 /* ─── Children container ─── */
-.tree-children {
-  /* indentation is handled per-node via the .tree-indent div width */
-}
+/* .tree-children não precisa de regras, pois a indentação correta é adicionada via inline style no React */
 
 /* ─── Empty / loading states ─── */
 .tree-empty {
