@@ -154,6 +154,7 @@ export const useIfcEngine = (containerRef) => {
       // Highlighter
       components.get(OBC.Raycasters).get(world);
       const highlighter = components.get(OBCF.Highlighter);
+
       highlighter.setup({
         world,
         selectMaterialDefinition: {

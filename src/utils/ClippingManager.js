@@ -46,7 +46,7 @@ export class ClippingManager {
     // have the current clipping planes applied.
     this._startClippingObserver();
 
-    logger.info('[CLIP] ClippingManager initialized, renderer.localClippingEnabled =', this.renderer.localClippingEnabled);
+    logger.info('[CLIP] ClippingManager initialized');
   }
 
   /* ────── public API ────── */
@@ -77,7 +77,8 @@ export class ClippingManager {
   setMode(mode) {
     this._mode = mode;
     for (const entry of this._entries) {
-      entry.controls.setMode(mode);
+      entry.translateCtrl.setMode(mode);
+      entry.rotateCtrl.setMode(mode);
     }
     logger.info('[CLIP] Mode changed to', mode);
   }
