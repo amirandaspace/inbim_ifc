@@ -105,7 +105,10 @@ export default function App() {
               onFitModel={() => viewerRef.current?.fitModel()}
               onToggleProjection={() => viewerRef.current?.toggleProjection()}
               onToggleGrid={() => viewerRef.current?.toggleGrid()}
-              onToggleClipping={() => setIsClippingActive(viewerRef.current?.toggleClipping())}
+              onToggleClipping={() => {
+                const active = viewerRef.current?.toggleClipping(() => setIsClippingActive(false));
+                setIsClippingActive(active);
+              }}
               onToggleClippingVisibility={() => setIsClippingVisible(viewerRef.current?.toggleClippingVisibility())}
               onHideSelection={() => viewerRef.current?.hideSelection()}
               onShowAll={() => viewerRef.current?.showAll()}

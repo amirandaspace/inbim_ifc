@@ -29,26 +29,75 @@ export const useIfcEngine = (containerRef) => {
       const world = worlds.create();
       
       world.scene = new OBC.SimpleScene(components);
-      world.scene.setup();
-      world.scene.three.background = new THREE.Color(0x12121a);
+      // Use setup() with BIM360-style lighting — this creates exactly
+      // 1 DirectionalLight + 1 AmbientLight internally.
+      world.scene.setup({
+        backgroundColor: new THREE.Color(0xd5dde3),
+        directionalLight: {
+          color: new THREE.Color(0xfff5e6),   // warm sun
+          intensity: 1.5,
+          position: new THREE.Vector3(80, 120, 60),
+        },
+        ambientLight: {
+          color: new THREE.Color(0x93a5b8),   // cool blue-grey ambient
+          intensity: 1.0,
+        },
+      });
 
-      // Lights
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-      world.scene.three.add(ambientLight);
-      const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x222222, 0.5);
+      // ── BIM360-style gradient background (blue sky → warm beige) ──
+      const bgCanvas = document.createElement('canvas');
+      bgCanvas.width = 2;
+      bgCanvas.height = 512;
+      const ctx = bgCanvas.getContext('2d');
+      const grad = ctx.createLinearGradient(0, 0, 0, 512);
+      grad.addColorStop(0, '#b4ccdf');   // soft blue-grey sky
+      grad.addColorStop(0.5, '#d9dfe5'); // neutral mid
+      grad.addColorStop(1, '#cfc4b5');   // warm beige ground
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 2, 512);
+      const bgTexture = new THREE.CanvasTexture(bgCanvas);
+      bgTexture.mapping = THREE.EquirectangularReflectionMapping;
+      world.scene.three.background = bgTexture;
+
+      // ── Additional lights (not created by setup) ──
+      // Hemisphere: blue sky above, warm ground below → gives surfaces
+      // a subtle blue tint on top and warm tone on bottom (like BIM360)
+      const hemisphereLight = new THREE.HemisphereLight(0x8aaccc, 0x8a7a66, 0.5);
       world.scene.three.add(hemisphereLight);
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
-      directionalLight.position.set(50, 100, 50);
-      world.scene.three.add(directionalLight);
 
-      world.renderer = new OBC.SimpleRenderer(components, container);
-      world.camera = new OBC.OrthoPerspectiveCamera(components);
-      world.camera.three.far = 100000;
-      world.camera.three.updateProjectionMatrix();
-      await world.camera.controls.setLookAt(50, 30, 50, 0, 0, 0);
+      // Enable shadows on the directional light that setup() created
+      for (const [, dl] of world.scene.directionalLights) {
+        dl.castShadow = true;
+        dl.shadow.mapSize.width = 2048;
+        dl.shadow.mapSize.height = 2048;
+        dl.shadow.camera.near = 0.5;
+        dl.shadow.camera.far = 500;
+        dl.shadow.camera.left = -150;
+        dl.shadow.camera.right = 150;
+        dl.shadow.camera.top = 150;
+        dl.shadow.camera.bottom = -150;
+        dl.shadow.bias = -0.001;
+        dl.shadow.normalBias = 0.02;
+      }
 
-      const grids = components.get(OBC.Grids);
-      grids.create(world);
+      // Fill light from opposite side (no shadow) to soften dark areas
+      const fillLight = new THREE.DirectionalLight(0xb0c4d8, 0.35);
+      fillLight.position.set(-50, 60, -40);
+      world.scene.three.add(fillLight);
+
+  world.renderer = new OBC.SimpleRenderer(components, container);
+  // Enable shadow maps for depth differentiation
+  world.renderer.three.shadowMap.enabled = true;
+  world.renderer.three.shadowMap.type = THREE.PCFSoftShadowMap;
+  world.renderer.three.toneMapping = THREE.ACESFilmicToneMapping;
+  world.renderer.three.toneMappingExposure = 1.0;
+  world.camera = new OBC.OrthoPerspectiveCamera(components);
+  world.camera.three.far = 100000;
+  world.camera.three.updateProjectionMatrix();
+  await world.camera.controls.setLookAt(50, 30, 50, 0, 0, 0);
+
+  const grids = components.get(OBC.Grids);
+  grids.create(world);
       
       // Force resize
       if (world.renderer) world.renderer.update(container);
@@ -106,9 +155,9 @@ export const useIfcEngine = (containerRef) => {
       highlighter.setup({
         world,
         selectMaterialDefinition: {
-          color: new THREE.Color('#bcf124'),
-          opacity: 1,
-          transparent: false,
+          color: new THREE.Color('#4fc3f7'),
+          opacity: 0.85,
+          transparent: true,
           renderedFaces: 0,
         },
       });

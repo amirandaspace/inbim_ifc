@@ -210,7 +210,7 @@ const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, 
         }
         return false;
     },
-    toggleClipping: () => {
+    toggleClipping: (onPlacedCallback) => {
         if (!engine) return false;
         
         // Lazy-create the manager
@@ -221,8 +221,12 @@ const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, 
         mgr.enabled = !mgr.enabled;
 
         const container = engine.world.renderer.three.domElement;
+        const highlighter = engine.highlighter;
         
         if (mgr.enabled) {
+            // Disable selection while in clipping placement mode
+            highlighter.enabled = false;
+            
             container.ondblclick = async (event) => {
                 // Try to raycast onto a face using OBC raycaster
                 const raycasters = engine.components.get(OBC.Raycasters);
@@ -252,14 +256,24 @@ const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, 
                     // No hit — place at model centre
                     mgr.createPlaneAtCenter();
                 }
+                
+                // One-shot: exit clipping placement mode after placing a plane
+                mgr.enabled = false;
+                container.ondblclick = null;
+                highlighter.enabled = true;
+                
+                // Notify parent to update button state
+                if (onPlacedCallback) onPlacedCallback();
             };
+            // Allow Delete/Backspace to remove the last clipping plane
             window.onkeydown = (e) => {
                 if (e.code === 'Delete' || e.code === 'Backspace') mgr.removeLastPlane();
             };
         } else {
+            // Exit placement mode (cancel)
             container.ondblclick = null;
-            window.onkeydown = null;
-            mgr.removeAll();
+            // Re-enable selection
+            highlighter.enabled = true;
         }
         return mgr.enabled;
     },
@@ -401,6 +415,12 @@ const IfcViewer = forwardRef(function IfcViewer({ onReady, onError, onSelect }, 
 
     // Handle selection via highlighter events
     const handleHighlight = async (selection) => {
+        // Re-apply clipping planes to any new highlight meshes
+        if (clippingMgrRef.current) {
+            // Small delay to let the Highlighter finish adding meshes to the scene
+            requestAnimationFrame(() => clippingMgrRef.current?.refreshClipping());
+        }
+
         if (!selection || Object.keys(selection).length === 0) {
             onSelect(null);
             return;

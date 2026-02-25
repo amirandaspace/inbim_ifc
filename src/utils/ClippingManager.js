@@ -40,6 +40,12 @@ export class ClippingManager {
 
     // Enable local clipping on the renderer
     this.renderer.localClippingEnabled = true;
+
+    // Start a render-loop observer that continuously ensures all
+    // materials (including dynamically-added highlight overlays)
+    // have the current clipping planes applied.
+    this._startClippingObserver();
+
     logger.info('[CLIP] ClippingManager initialized, renderer.localClippingEnabled =', this.renderer.localClippingEnabled);
   }
 
@@ -291,6 +297,44 @@ export class ClippingManager {
     plane.setFromNormalAndCoplanarPoint(normal, helper.position);
   }
 
+  /**
+   * Public method: force-refresh clipping on all scene materials.
+   * Call after events that create new meshes (e.g. highlight selection).
+   */
+  refreshClipping() {
+    if (this._clippingPlanes.length > 0) {
+      this._applyClippingToScene();
+    }
+  }
+
+  /**
+   * Start an animation-frame loop that re-applies clipping planes
+   * whenever there are active planes. This catches any mesh added
+   * by third-party code (Highlighter, etc.) that bypasses scene.add hooks.
+   */
+  _startClippingObserver() {
+    this._observerRunning = true;
+    const tick = () => {
+      if (!this._observerRunning) return;
+      if (this._clippingPlanes.length > 0) {
+        this._applyClippingToScene();
+      }
+      this._observerRAF = requestAnimationFrame(tick);
+    };
+    this._observerRAF = requestAnimationFrame(tick);
+  }
+
+  /**
+   * Stop the clipping observer (call on dispose).
+   */
+  _stopClippingObserver() {
+    this._observerRunning = false;
+    if (this._observerRAF) {
+      cancelAnimationFrame(this._observerRAF);
+      this._observerRAF = null;
+    }
+  }
+
   /** Walk the scene and set clippingPlanes on every material */
   _applyClippingToScene() {
     const planes = this._clippingPlanes;
@@ -298,9 +342,18 @@ export class ClippingManager {
       if (obj.isMesh && obj.material && !obj.userData.__clippingHelper) {
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
         for (const mat of mats) {
-          mat.clippingPlanes = planes.length > 0 ? [...planes] : null;
-          mat.clipShadows = true;
-          mat.needsUpdate = true;
+          // Only update if planes reference changed to minimise overhead
+          if (planes.length > 0) {
+            if (!mat.clippingPlanes || mat.clippingPlanes.length !== planes.length ||
+                !planes.every((p, i) => mat.clippingPlanes[i] === p)) {
+              mat.clippingPlanes = [...planes];
+              mat.clipShadows = true;
+              mat.needsUpdate = true;
+            }
+          } else if (mat.clippingPlanes && mat.clippingPlanes.length > 0) {
+            mat.clippingPlanes = null;
+            mat.needsUpdate = true;
+          }
         }
       }
     });

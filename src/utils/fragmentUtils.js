@@ -32,16 +32,28 @@ export const clearHelperObjects = (scene) => {
  * @param {THREE.Scene} scene 
  */
 export const ensureSceneLighting = (scene) => {
-  // Add ambient light if not present
-  if (!scene.children.some(c => c.isAmbientLight)) {
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+  // Check what's already in the scene to avoid duplicates
+  const hasAmbient = scene.children.some(c => c.isAmbientLight);
+  const hasDirLight = scene.children.some(c => c.isDirectionalLight);
+  const hasHemi = scene.children.some(c => c.isHemisphereLight);
+  
+  if (!hasAmbient) {
+    const ambientLight = new THREE.AmbientLight(0xc8d8e8, 0.45);
     scene.add(ambientLight);
   }
   
-  // Add directional light if not present
-  if (!scene.children.some(c => c.isDirectionalLight)) {
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.position.set(10, 10, 10);
+  if (!hasHemi) {
+    const hemisphereLight = new THREE.HemisphereLight(0x9bbbd4, 0x7a6e5a, 0.6);
+    scene.add(hemisphereLight);
+  }
+  
+  if (!hasDirLight) {
+    const directionalLight = new THREE.DirectionalLight(0xfff5e6, 1.6);
+    directionalLight.position.set(80, 120, 60);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.bias = -0.001;
     scene.add(directionalLight);
   }
 };
