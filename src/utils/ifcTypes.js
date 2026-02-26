@@ -18,17 +18,42 @@ function getTypeCodeMap() {
   return _typeCodeMap;
 }
 
+const PROPER_CASING_MAP = {
+  IFCPROJECT: 'IfcProject', IFCSITE: 'IfcSite', IFCBUILDING: 'IfcBuilding', IFCBUILDINGSTOREY: 'IfcBuildingStorey',
+  IFCSPACE: 'IfcSpace', IFCZONE: 'IfcZone', IFCWALL: 'IfcWall', IFCWALLSTANDARDCASE: 'IfcWallStandardCase',
+  IFCSLAB: 'IfcSlab', IFCBEAM: 'IfcBeam', IFCCOLUMN: 'IfcColumn', IFCDOOR: 'IfcDoor', IFCWINDOW: 'IfcWindow',
+  IFCSTAIR: 'IfcStair', IFCSTAIRFLIGHT: 'IfcStairFlight', IFCROOF: 'IfcRoof', IFCRAILING: 'IfcRailing',
+  IFCPLATE: 'IfcPlate', IFCMEMBER: 'IfcMember', IFCFOOTING: 'IfcFooting', IFCPILE: 'IfcPile',
+  IFCCURTAINWALL: 'IfcCurtainWall', IFCBUILDINGELEMENTPROXY: 'IfcBuildingElementProxy',
+  IFCFURNISHINGELEMENT: 'IfcFurnishingElement', IFCOPENINGELEMENT: 'IfcOpeningElement',
+  IFCDISTRIBUTIONELEMENT: 'IfcDistributionElement', IFCFLOWTERMINAL: 'IfcFlowTerminal',
+  IFCFLOWSEGMENT: 'IfcFlowSegment', IFCFLOWFITTING: 'IfcFlowFitting', IFCFLOWCONTROLLER: 'IfcFlowController'
+};
+
 /**
- * Returns "IfcProject" style name from a numeric web-ifc type code.
- * Falls back to "IfcElement" for unknowns.
+ * Returns correctly-cased string given numeric web-ifc type code, or fallback upper case string.
  */
 export function getIfcTypeName(typeCode) {
   if (typeCode == null) return 'IfcElement';
-  const map = getTypeCodeMap();
-  const raw = map[typeCode]; // "IFCPROJECT"
-  if (!raw) return `IfcType_${typeCode}`;
-  // Convert IFCPROJECT → IfcProject (preserve IFC prefix casing, title-case the rest)
-  return 'Ifc' + raw.slice(3, 4).toUpperCase() + raw.slice(4).toLowerCase();
+
+  // If it's already a string, process it directly instead of map lookup
+  let raw = String(typeCode);
+  if (!isNaN(Number(typeCode))) {
+    const map = getTypeCodeMap();
+    raw = map[typeCode] || `IfcType_${typeCode}`;
+  }
+
+  // Pre-mapped camelCasing for correct comparison against Sets
+  const upperRaw = raw.toUpperCase();
+  if (PROPER_CASING_MAP[upperRaw]) {
+    return PROPER_CASING_MAP[upperRaw];
+  }
+
+  // Fallback title-case transformation Ifc+something
+  if (upperRaw.startsWith('IFC')) {
+    return 'Ifc' + upperRaw.slice(3, 4).toUpperCase() + upperRaw.slice(4).toLowerCase();
+  }
+  return raw;
 }
 
 /**

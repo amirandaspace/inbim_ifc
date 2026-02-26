@@ -6,7 +6,8 @@ import { Eye, EyeOff, ChevronRight, ChevronDown, RefreshCw, X, Search } from 'lu
 
 /** Collect all expressIDs in a subtree (inclusive) */
 function collectAllIDs(node) {
-  const ids = [node.expressID];
+  const ids = [];
+  if (node.expressID != null) ids.push(node.expressID);
   for (const child of node.children ?? []) {
     ids.push(...collectAllIDs(child));
   }
@@ -27,9 +28,15 @@ function nodeMatchesSearch(node, query) {
 
 function TreeNode({ node, viewerRef, hiddenIDs, onToggleHidden, modelId, depth = 0 }) {
   const isSpatial = SPATIAL_TYPES.has(node.type);
-  const [expanded, setExpanded] = useState(isSpatial);
+  const [expanded, setExpanded] = useState(isSpatial || node.expressID == null);
   const hasChildren = (node.children?.length ?? 0) > 0;
-  const isHidden = hiddenIDs.has(node.expressID);
+
+  const isHidden = useMemo(() => {
+    if (node.expressID != null) return hiddenIDs.has(node.expressID);
+    if (!hasChildren) return false;
+    const all = collectAllIDs(node);
+    return all.length > 0 && all.every(id => hiddenIDs.has(id));
+  }, [node, hiddenIDs, hasChildren]);
 
   const handleSelect = useCallback((e) => {
     e.stopPropagation();

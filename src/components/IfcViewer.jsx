@@ -7,28 +7,9 @@ import { disposeAllFragments, clearHelperObjects, ensureSceneLighting } from '..
 import { ClippingManager } from '../utils/ClippingManager';
 import ViewCube from './ViewCube';
 import { logger } from '../utils/logger';
+import { SPATIAL_TYPES, getIfcTypeName } from '../utils/ifcTypes';
 
 /* ─── Spatial tree helpers (OBC v3 / FRAGS v3) ─── */
-
-/**
- * Convert a numeric FRAGS category code to a readable IFC type string.
- * ifcCategoryMap: { '103090709': 'IFCPROJECT', ... }
- * Returns 'IfcProject' style string.
- */
-function catToTypeName(catCode) {
-    if (catCode == null) return 'IfcElement';
-    const val = String(catCode);
-    let raw = FRAGS.ifcCategoryMap?.[val];
-    // If not found in map, maybe it's already the raw string (e.g. "IFCPROJECT")
-    if (!raw && isNaN(Number(val))) raw = val;
-
-    if (!raw) return `IfcType_${val}`;
-    // 'IFCPROJECT' → 'IfcProject'
-    if (raw.startsWith('IFC')) {
-        return 'Ifc' + raw.slice(3, 4).toUpperCase() + raw.slice(4).toLowerCase();
-    }
-    return raw;
-}
 
 /**
  * Collect all localIds in a raw getSpatialStructure tree.
@@ -39,31 +20,105 @@ function collectLocalIds(node, out = []) {
     return out;
 }
 
-/**
- * Recursively convert a raw getSpatialStructure node (category+localId+children)
- * into our display node (type, name, expressID, children).
- * Also flattens out any dummy 'IfcElement' grouping nodes that OBC creates.
- */
-function enrichNode(raw, nameMap) {
-    const typeName = catToTypeName(raw.category);
-    const name = nameMap.get(raw.localId) ?? typeName;
+// 1. Convert to simple nested nodes and flatten out meaningless wrappers
+function flattenWrappers(raw, nameMap, typeMap) {
+    let typeName = 'IfcElement';
+    if (raw.localId != null && typeMap.has(raw.localId)) {
+        typeName = getIfcTypeName(typeMap.get(raw.localId));
+    } else if (raw.category != null) {
+        typeName = getIfcTypeName(raw.category);
+    }
 
-    let children = [];
+    let name = typeName;
+    if (raw.localId != null && nameMap.has(raw.localId)) {
+        name = nameMap.get(raw.localId);
+    }
+
+    let processedChildren = [];
     for (const c of (raw.children ?? [])) {
-        const childNode = enrichNode(c, nameMap);
+        processedChildren.push(...flattenWrappers(c, nameMap, typeMap));
+    }
 
-        // Achatamento agressivo: Se o nó é 'IfcElement' e tem filhos, ele é um nó de agrupamento (ex: IfcRelAggregates)
-        // do OBC v3 que não queremos exibir na árvore.
-        const isWrapper = childNode.type === 'IfcElement' && childNode.children && childNode.children.length > 0;
+    const hasValidId = raw.localId != null && raw.localId !== 0;
 
-        if (isWrapper) {
-            children.push(...(childNode.children || []));
+    let isDummy = false;
+    if (typeName === 'IfcElement' || typeName.startsWith('IfcRel')) {
+        if (processedChildren.length > 0 || !hasValidId) {
+            isDummy = true;
+        }
+    } else if (!hasValidId && !SPATIAL_TYPES.has(typeName)) {
+        isDummy = true;
+    }
+
+    if (isDummy) {
+        return processedChildren;
+    }
+
+    return [{
+        expressID: raw.localId,
+        type: typeName,
+        name: name,
+        children: processedChildren
+    }];
+}
+
+// 2. Group non-spatial elements by type directly under their parent
+function groupElementTypes(node) {
+    if (!node.children || node.children.length === 0) return node;
+
+    const newChildren = [];
+    const elementsByType = {};
+
+    for (const child of node.children) {
+        const groupedChild = groupElementTypes(child);
+
+        if (SPATIAL_TYPES.has(groupedChild.type)) {
+            newChildren.push(groupedChild);
         } else {
-            children.push(childNode);
+            if (!elementsByType[groupedChild.type]) {
+                elementsByType[groupedChild.type] = [];
+            }
+            elementsByType[groupedChild.type].push(groupedChild);
         }
     }
 
-    return { expressID: raw.localId, type: typeName, name, children };
+    for (const [type, elements] of Object.entries(elementsByType)) {
+        newChildren.push({
+            expressID: null,
+            type: type,
+            name: `[${type}]`,
+            children: elements
+        });
+    }
+
+    newChildren.sort((a, b) => {
+        const aIsFolder = a.expressID === null;
+        const bIsFolder = b.expressID === null;
+        if (aIsFolder !== bIsFolder) return aIsFolder ? 1 : -1;
+        return a.name.localeCompare(b.name);
+    });
+
+    return {
+        ...node,
+        children: newChildren
+    };
+}
+
+function enrichNode(raw, nameMap, typeMap) {
+    const flatNodes = flattenWrappers(raw, nameMap, typeMap);
+    if (flatNodes.length === 0) return null;
+
+    let root = flatNodes[0];
+    if (flatNodes.length > 1) {
+        root = {
+            expressID: null,
+            type: 'IfcProject',
+            name: 'Project',
+            children: flatNodes
+        };
+    }
+
+    return groupElementTypes(root);
 }
 
 /**
@@ -101,6 +156,7 @@ async function buildModelTree(model) {
 
     // Batch-fetch names for all localIds in one call
     const nameMap = new Map();
+    const typeMap = new Map();
     try {
         const localIds = collectLocalIds(raw);
         logger.info('[TREE] localIds collected:', localIds.length, 'first few:', localIds.slice(0, 5));
@@ -110,6 +166,9 @@ async function buildModelTree(model) {
             if (item == null) continue;
             const id = item.localId ?? item.expressID;
             if (id == null) continue;
+
+            if (item.type != null) typeMap.set(id, item.type);
+
             const nameRaw = item.Name ?? item.LongName;
             const name = typeof nameRaw === 'object' ? nameRaw?.value : nameRaw;
             if (name) nameMap.set(id, String(name));
@@ -119,7 +178,7 @@ async function buildModelTree(model) {
         logger.warn('[TREE] getItemsData failed (names will fall back to types):', err);
     }
 
-    const tree = enrichNode(raw, nameMap);
+    const tree = enrichNode(raw, nameMap, typeMap);
     logger.info('[TREE] final tree root:', tree?.type, tree?.name, 'children:', tree?.children?.length);
     return tree;
 }
