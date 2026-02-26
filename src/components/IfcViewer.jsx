@@ -29,9 +29,20 @@ function flattenWrappers(raw, nameMap, typeMap) {
         typeName = getIfcTypeName(raw.category);
     }
 
+    // Top-level spatial types show only the type label (IfcProject, IfcSite, IfcBuilding)
+    // Lower-level spatial types show only the real name (e.g., "Térreo", "Sala")
+    const TOP_SPATIAL = new Set(['IfcProject', 'IfcSite', 'IfcBuilding']);
+
     let name = typeName;
     if (raw.localId != null && nameMap.has(raw.localId)) {
-        name = nameMap.get(raw.localId);
+        const realName = nameMap.get(raw.localId);
+        if (TOP_SPATIAL.has(typeName)) {
+            // Top-level: always show type name
+            name = typeName;
+        } else if (realName && realName !== typeName) {
+            // Lower-level (BuildingStorey, Space, Zone): show only real name
+            name = realName;
+        }
     }
 
     let processedChildren = [];
@@ -42,11 +53,16 @@ function flattenWrappers(raw, nameMap, typeMap) {
     const hasValidId = raw.localId != null && raw.localId !== 0;
 
     let isDummy = false;
-    if (typeName === 'IfcElement' || typeName.startsWith('IfcRel')) {
+    if (SPATIAL_TYPES.has(typeName)) {
+        // Spatial wrappers without valid IDs are just type containers — flatten them
+        if (!hasValidId) {
+            isDummy = true;
+        }
+    } else if (typeName === 'IfcElement' || typeName.startsWith('IfcRel')) {
         if (processedChildren.length > 0 || !hasValidId) {
             isDummy = true;
         }
-    } else if (!hasValidId && !SPATIAL_TYPES.has(typeName)) {
+    } else if (!hasValidId) {
         isDummy = true;
     }
 
@@ -157,23 +173,36 @@ async function buildModelTree(model) {
     // Batch-fetch names for all localIds in one call
     const nameMap = new Map();
     const typeMap = new Map();
+
+    // Helper: v3 getItemsData returns STEP-encoded objects like { type: 1, value: 12345 }
+    // This unwraps to the raw value, handling both objects and primitives
+    const unwrap = (v) => {
+        if (v == null) return v;
+        if (typeof v === 'object' && v.value !== undefined) return v.value;
+        return v;
+    };
+
     try {
         const localIds = collectLocalIds(raw);
-        logger.info('[TREE] localIds collected:', localIds.length, 'first few:', localIds.slice(0, 5));
+        logger.info('[TREE] localIds collected:', localIds.length);
         const itemsData = await model.getItemsData(localIds);
-        logger.info('[TREE] getItemsData returned:', itemsData?.length, 'items, sample[0]:', itemsData?.[0]);
+        logger.info('[TREE] getItemsData returned:', itemsData?.length, 'items');
+
         for (const item of itemsData ?? []) {
             if (item == null) continue;
-            const id = item.localId ?? item.expressID;
+            // v3 API returns underscore-prefixed STEP-encoded properties
+            const id = unwrap(item._localId) ?? unwrap(item.localId) ?? unwrap(item.expressID);
             if (id == null) continue;
 
-            if (item.type != null) typeMap.set(id, item.type);
+            // _category holds the numeric IFC type code (STEP-encoded)
+            const typeCode = unwrap(item._category) ?? unwrap(item.type);
+            if (typeCode != null) typeMap.set(id, typeCode);
 
             const nameRaw = item.Name ?? item.LongName;
-            const name = typeof nameRaw === 'object' ? nameRaw?.value : nameRaw;
+            const name = unwrap(nameRaw);
             if (name) nameMap.set(id, String(name));
         }
-        logger.info('[TREE] nameMap size:', nameMap.size);
+        logger.info('[TREE] nameMap size:', nameMap.size, 'typeMap size:', typeMap.size);
     } catch (err) {
         logger.warn('[TREE] getItemsData failed (names will fall back to types):', err);
     }

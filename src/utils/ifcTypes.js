@@ -19,7 +19,7 @@ function getTypeCodeMap() {
 }
 
 const PROPER_CASING_MAP = {
-  IFCPROJECT: 'IfcProject', IFCSITE: 'IfcSite', IFCBUILDING: 'IfcBuilding', IFCBUILDINGSTOREY: 'IfcBuildingStorey',
+  IFCPROJECT: 'IfcProject', IFCSITE: 'IfcSite', IFCBUILDING: 'IfcBuilding', IFCBUILDINGSTOREY: 'IfcBuildingStorey', IFCSPATIALZONE: 'IfcSpatialZone',
   IFCSPACE: 'IfcSpace', IFCZONE: 'IfcZone', IFCWALL: 'IfcWall', IFCWALLSTANDARDCASE: 'IfcWallStandardCase',
   IFCSLAB: 'IfcSlab', IFCBEAM: 'IfcBeam', IFCCOLUMN: 'IfcColumn', IFCDOOR: 'IfcDoor', IFCWINDOW: 'IfcWindow',
   IFCSTAIR: 'IfcStair', IFCSTAIRFLIGHT: 'IfcStairFlight', IFCROOF: 'IfcRoof', IFCRAILING: 'IfcRailing',
@@ -66,6 +66,7 @@ export const SPATIAL_TYPES = new Set([
   'IfcBuildingStorey',
   'IfcSpace',
   'IfcZone',
+  'IfcSpatialZone',
 ]);
 
 /** Short display label for IFC type (strips "Ifc" prefix, adds spaces) */
@@ -77,6 +78,7 @@ export function getTypeLabel(typeName) {
     IfcBuildingStorey: 'Storey',
     IfcSpace: 'Space',
     IfcZone: 'Zone',
+    IfcSpatialZone: 'Spatial Zone',
     IfcWall: 'Wall',
     IfcWallStandardCase: 'Wall',
     IfcSlab: 'Slab',
@@ -114,6 +116,7 @@ export function getTypeIcon(typeName) {
     IfcBuildingStorey: '🏬',
     IfcSpace: '📐',
     IfcZone: '🔲',
+    IfcSpatialZone: '🔳',
     IfcWall: '🧱',
     IfcWallStandardCase: '🧱',
     IfcSlab: '▬',
